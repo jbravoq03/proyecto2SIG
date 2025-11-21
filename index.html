@@ -2,42 +2,539 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>4. Mapas de estadísticas policiales</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis Criminal Vehicular - Costa Rica</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
         body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            background-color: #f4f4f4;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            overflow: hidden;
         }
-        h1 {
-            margin-bottom: 40px;
+        
+        #map {
+            width: 100%;
+            height: 100vh;
         }
-        button {
-            width: 300px;
-            padding: 15px;
-            margin: 10px;
-            font-size: 16px;
-            cursor: pointer;
-            border: none;
+        
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px 20px;
             border-radius: 8px;
-            background-color: #007BFF;
-            color: white;
-            transition: background-color 0.3s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            max-width: 300px;
+            min-width: 250px;
         }
-        button:hover {
-            background-color: #0056b3;
+        
+        .info-panel h4 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+            font-size: 16px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+        }
+        
+        .info-panel p {
+            margin: 5px 0;
+            color: #555;
+            font-size: 14px;
+        }
+        
+        .info-panel .highlight {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .legend {
+            position: absolute;
+            bottom: 30px;
+            right: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            min-width: 200px;
+        }
+        
+        .legend h4 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+            font-size: 13px;
+        }
+        
+        .legend-color {
+            width: 30px;
+            height: 20px;
+            margin-right: 10px;
+            border: 1px solid #999;
+            border-radius: 3px;
+        }
+        
+        .layer-control {
+            position: absolute;
+            top: 20px;
+            left: 60px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            min-width: 280px;
+        }
+        
+        .layer-control h3 {
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+            font-size: 16px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+        }
+        
+        .layer-option {
+            margin: 10px 0;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background 0.2s;
+        }
+        
+        .layer-option:hover {
+            background: #f0f0f0;
+        }
+        
+        .layer-option input {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+        
+        .layer-option label {
+            cursor: pointer;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .marker-cluster {
+            background-color: rgba(52, 152, 219, 0.6);
+            border-radius: 50%;
+            text-align: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 2000;
+            font-size: 16px;
+            color: #2c3e50;
         }
     </style>
 </head>
 <body>
-    <h1>4. Mapas de estadísticas policiales</h1>
-    <button onclick="location.href='mapa_clorop_robos.html'">b. Mapa de coropletas de robos</button>
-    <button onclick="location.href='mapa_clorop_tachas.html'">a. Mapa de coropletas de asaltos</button>
-    <button onclick="location.href='mapa_bancos.html'">c. Agencias bancarias en áreas con mayor cantidad de robos</button>
-    <button onclick="location.href='mapa_hoteles.html'">d. Hoteles en áreas con mayor cantidad de asaltos</button>
+    <div id="map"></div>
+    
+    <div class="info-panel">
+        <h4>Información</h4>
+        <p id="info-content">Pase el cursor sobre un distrito o punto de interés</p>
+    </div>
+    
+    <div class="legend" id="legend">
+        <h4>Leyenda</h4>
+        <div id="legend-content"></div>
+    </div>
+    
+    <div class="layer-control">
+        <h3>Capas del Mapa</h3>
+        <div class="layer-option">
+            <input type="radio" id="layer-robos" name="layer" value="robos" checked>
+            <label for="layer-robos">🚗 Robos de Vehículos (Coropletas)</label>
+        </div>
+        <div class="layer-option">
+            <input type="radio" id="layer-tachas" name="layer" value="tachas">
+            <label for="layer-tachas">🔧 Tachas de Vehículos (Coropletas)</label>
+        </div>
+        <div class="layer-option">
+            <input type="radio" id="layer-bancos" name="layer" value="bancos">
+            <label for="layer-bancos">🏦 Bancos en Zonas de Alto Robo</label>
+        </div>
+        <div class="layer-option">
+            <input type="radio" id="layer-hoteles" name="layer" value="hoteles">
+            <label for="layer-hoteles">🏨 Hoteles en Zonas de Alta Tacha</label>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script>
+        // Inicializar el mapa centrado en Costa Rica
+        const map = L.map('map').setView([9.7489, -83.7534], 8);
+        
+        // Añadir capa base de OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 18
+        }).addTo(map);
+        
+        // Variables globales para las capas
+        let currentLayer = null;
+        let currentLayerType = 'robos';
+        
+        // Panel de información
+        const infoPanel = document.getElementById('info-content');
+        
+        // Función para obtener color según cantidad de robos
+        function getColorRobos(cantidad) {
+            return cantidad > 80  ? '#800026' :
+                   cantidad > 60  ? '#BD0026' :
+                   cantidad > 40  ? '#E31A1C' :
+                   cantidad > 30  ? '#FC4E2A' :
+                   cantidad > 20  ? '#FD8D3C' :
+                   cantidad > 10  ? '#FEB24C' :
+                   cantidad > 5   ? '#FED976' :
+                                    '#FFEDA0';
+        }
+        
+        // Función para normalizar nombres de propiedades (mayúsculas y minúsculas)
+        function getProp(props, ...names) {
+            for (let name of names) {
+                if (props[name] !== undefined && props[name] !== null) return props[name];
+                if (props[name.toUpperCase()] !== undefined && props[name.toUpperCase()] !== null) return props[name.toUpperCase()];
+                if (props[name.toLowerCase()] !== undefined && props[name.toLowerCase()] !== null) return props[name.toLowerCase()];
+            }
+            return null;
+        }
+        
+        // Función para obtener color según cantidad de tachas
+        function getColorTachas(cantidad) {
+            return cantidad > 80  ? '#084594' :
+                   cantidad > 60  ? '#2171B5' :
+                   cantidad > 40  ? '#4292C6' :
+                   cantidad > 30  ? '#6BAED6' :
+                   cantidad > 20  ? '#9ECAE1' :
+                   cantidad > 10  ? '#C6DBEF' :
+                   cantidad > 5   ? '#DEEBF7' :
+                                    '#F7FBFF';
+        }
+        
+        // Función para estilizar las capas de coropletas
+        function styleRobos(feature) {
+            const cantidad = getProp(feature.properties, 'CANTROBOSV', 'cantrobosv') || 0;
+            return {
+                fillColor: getColorRobos(cantidad),
+                weight: 1,
+                opacity: 1,
+                color: '#666',
+                fillOpacity: 0.7
+            };
+        }
+        
+        function styleTachas(feature) {
+            const cantidad = getProp(feature.properties, 'CANTTACHAV', 'canttachav') || 0;
+            return {
+                fillColor: getColorTachas(cantidad),
+                weight: 1,
+                opacity: 1,
+                color: '#666',
+                fillOpacity: 0.7
+            };
+        }
+        
+        // Función para resaltar al pasar el mouse
+        function highlightFeature(e) {
+            const layer = e.target;
+            
+            layer.setStyle({
+                weight: 3,
+                color: '#333',
+                fillOpacity: 0.9
+            });
+            
+            layer.bringToFront();
+            
+            // Actualizar panel de información
+            const props = layer.feature.properties;
+            const distrito = getProp(props, 'NDISTRITO', 'ndistrito', 'DISTRITO', 'distrito');
+            const canton = getProp(props, 'NCANTON', 'ncanton', 'CANTON', 'canton');
+            const provincia = getProp(props, 'PROVINCIA', 'provincia', 'PROVINCI_1', 'provinci_1');
+            
+            let info = `<p><span class="highlight">${distrito || 'N/A'}</span></p>`;
+            info += `<p>Cantón: ${canton || 'N/A'}</p>`;
+            info += `<p>Provincia: ${provincia || 'N/A'}</p>`;
+            
+            if (currentLayerType === 'robos') {
+                const robos = getProp(props, 'CANTROBOSV', 'cantrobosv');
+                info += `<p>Robos: <span class="highlight">${robos || 0}</span></p>`;
+            } else if (currentLayerType === 'tachas') {
+                const tachas = getProp(props, 'CANTTACHAV', 'canttachav');
+                info += `<p>Tachas: <span class="highlight">${tachas || 0}</span></p>`;
+            }
+            
+            infoPanel.innerHTML = info;
+        }
+        
+        function resetHighlight(e) {
+            if (currentLayer) {
+                currentLayer.resetStyle(e.target);
+            }
+            infoPanel.innerHTML = 'Pase el cursor sobre un distrito o punto de interés';
+        }
+        
+        // Función para eventos en capas de polígonos
+        function onEachFeature(feature, layer) {
+            layer.on({
+                mouseover: highlightFeature,
+                mouseout: resetHighlight
+            });
+        }
+        
+        // Actualizar leyenda
+        function updateLegend(type) {
+            const legendContent = document.getElementById('legend-content');
+            let html = '';
+            
+            if (type === 'robos') {
+                const grades = [0, 5, 10, 20, 30, 40, 60, 80];
+                html = '<div style="margin-bottom: 5px; font-weight: bold;">Robos de Vehículos</div>';
+                for (let i = 0; i < grades.length; i++) {
+                    html += '<div class="legend-item">' +
+                        '<div class="legend-color" style="background:' + getColorRobos(grades[i] + 1) + '"></div>' +
+                        '<span>' + grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] : '+') + '</span>' +
+                        '</div>';
+                }
+            } else if (type === 'tachas') {
+                const grades = [0, 5, 10, 20, 30, 40, 60, 80];
+                html = '<div style="margin-bottom: 5px; font-weight: bold;">Tachas de Vehículos</div>';
+                for (let i = 0; i < grades.length; i++) {
+                    html += '<div class="legend-item">' +
+                        '<div class="legend-color" style="background:' + getColorTachas(grades[i] + 1) + '"></div>' +
+                        '<span>' + grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] : '+') + '</span>' +
+                        '</div>';
+                }
+            } else if (type === 'bancos') {
+                html = '<div style="margin-bottom: 5px; font-weight: bold;">Agencias Bancarias</div>';
+                html += '<div class="legend-item">' +
+                    '<div style="width: 20px; height: 20px; background: #e74c3c; border-radius: 50%; margin-right: 10px; border: 2px solid white;"></div>' +
+                    '<span>Banco en zona de alto robo</span>' +
+                    '</div>';
+                html += '<div class="legend-item" style="margin-top: 10px;">' +
+                    '<div class="legend-color" style="background: rgba(231, 76, 60, 0.2); border: 2px solid #e74c3c;"></div>' +
+                    '<span>Top 10 distritos (robos)</span>' +
+                    '</div>';
+            } else if (type === 'hoteles') {
+                html = '<div style="margin-bottom: 5px; font-weight: bold;">Hoteles</div>';
+                html += '<div class="legend-item">' +
+                    '<div style="width: 20px; height: 20px; background: #3498db; border-radius: 50%; margin-right: 10px; border: 2px solid white;"></div>' +
+                    '<span>Hotel en zona de alta tacha</span>' +
+                    '</div>';
+                html += '<div class="legend-item" style="margin-top: 10px;">' +
+                    '<div class="legend-color" style="background: rgba(52, 152, 219, 0.2); border: 2px solid #3498db;"></div>' +
+                    '<span>Top 10 distritos (tachas)</span>' +
+                    '</div>';
+            }
+            
+            legendContent.innerHTML = html;
+        }
+        
+        // Cargar capas según selección
+        async function loadLayer(layerType) {
+            // Remover capa actual
+            if (currentLayer) {
+                map.removeLayer(currentLayer);
+            }
+            
+            currentLayerType = layerType;
+            
+            try {
+                if (layerType === 'robos') {
+                    // Cargar GeoJSON de robos
+                    const response = await fetch('geo_distritos.geojson');
+                    const data = await response.json();
+                    
+                    currentLayer = L.geoJSON(data, {
+                        style: styleRobos,
+                        onEachFeature: onEachFeature
+                    }).addTo(map);
+                    
+                    updateLegend('robos');
+                    map.fitBounds(currentLayer.getBounds());
+                    
+                } else if (layerType === 'tachas') {
+                    // Cargar GeoJSON de tachas
+                    const response = await fetch('geo_distritos.geojson');
+                    const data = await response.json();
+                    
+                    currentLayer = L.geoJSON(data, {
+                        style: styleTachas,
+                        onEachFeature: onEachFeature
+                    }).addTo(map);
+                    
+                    updateLegend('tachas');
+                    map.fitBounds(currentLayer.getBounds());
+                    
+                } else if (layerType === 'bancos') {
+                    // Cargar top 10 distritos de robos + bancos
+                    const [distritosResp, bancosResp] = await Promise.all([
+                        fetch('top10_distritos_robosvehiculo.geojson'),
+                        fetch('bancos_en_top10_distritos_robovehiculo.geojson')
+                    ]);
+                    
+                    const distritosData = await distritosResp.json();
+                    const bancosData = await bancosResp.json();
+                    
+                    // Capa de distritos (fondo)
+                    const distritosLayer = L.geoJSON(distritosData, {
+                        style: {
+                            fillColor: '#e74c3c',
+                            fillOpacity: 0.2,
+                            color: '#e74c3c',
+                            weight: 2
+                        },
+                        onEachFeature: onEachFeature
+                    });
+                    
+                    // Capa de bancos (puntos)
+                    const bancosLayer = L.geoJSON(bancosData, {
+                        pointToLayer: (feature, latlng) => {
+                            return L.circleMarker(latlng, {
+                                radius: 8,
+                                fillColor: '#e74c3c',
+                                color: '#fff',
+                                weight: 2,
+                                opacity: 1,
+                                fillOpacity: 0.8
+                            });
+                        },
+                        onEachFeature: (feature, layer) => {
+                            layer.on('mouseover', (e) => {
+                                const props = feature.properties;
+                                const banco = getProp(props, 'BANCO', 'banco');
+                                const agencia = getProp(props, 'AGENCIA', 'agencia');
+                                const distrito = getProp(props, 'NDISTRITO', 'ndistrito', 'DISTRITO', 'distrito');
+                                const direccion = getProp(props, 'DIRECCION', 'direccion');
+                                const telefono = getProp(props, 'TELEFONO', 'telefono');
+                                const robos = getProp(props, 'CANTROBOSV', 'cantrobosv');
+                                
+                                let info = `<p><span class="highlight">${banco || 'Banco'}</span></p>`;
+                                info += `<p>Agencia: ${agencia || 'N/A'}</p>`;
+                                info += `<p>Distrito: ${distrito || 'N/A'}</p>`;
+                                info += `<p>Dirección: ${direccion || 'N/A'}</p>`;
+                                if (telefono) info += `<p>Tel: ${telefono}</p>`;
+                                info += `<p>Robos en distrito: <span class="highlight">${robos || 0}</span></p>`;
+                                infoPanel.innerHTML = info;
+                            });
+                            
+                            layer.on('mouseout', () => {
+                                infoPanel.innerHTML = 'Pase el cursor sobre un distrito o punto de interés';
+                            });
+                        }
+                    });
+                    
+                    currentLayer = L.layerGroup([distritosLayer, bancosLayer]).addTo(map);
+                    updateLegend('bancos');
+                    map.fitBounds(distritosLayer.getBounds());
+                    
+                } else if (layerType === 'hoteles') {
+                    // Cargar top 10 distritos de tachas + hoteles
+                    const [distritosResp, hotelesResp] = await Promise.all([
+                        fetch('top10_distritos_tachasvehiculo.geojson'),
+                        fetch('hoteles_en_top10_distritos_tachasvehiculo.geojson')
+                    ]);
+                    
+                    const distritosData = await distritosResp.json();
+                    const hotelesData = await hotelesResp.json();
+                    
+                    // Capa de distritos (fondo)
+                    const distritosLayer = L.geoJSON(distritosData, {
+                        style: {
+                            fillColor: '#3498db',
+                            fillOpacity: 0.2,
+                            color: '#3498db',
+                            weight: 2
+                        },
+                        onEachFeature: onEachFeature
+                    });
+                    
+                    // Capa de hoteles (puntos)
+                    const hotelesLayer = L.geoJSON(hotelesData, {
+                        pointToLayer: (feature, latlng) => {
+                            return L.circleMarker(latlng, {
+                                radius: 8,
+                                fillColor: '#3498db',
+                                color: '#fff',
+                                weight: 2,
+                                opacity: 1,
+                                fillOpacity: 0.8
+                            });
+                        },
+                        onEachFeature: (feature, layer) => {
+                            layer.on('mouseover', (e) => {
+                                const props = feature.properties;
+                                const nombre = getProp(props, 'NOMBRE', 'nombre');
+                                const distrito = getProp(props, 'NDISTRITO', 'ndistrito', 'DISTRITO', 'distrito');
+                                const direccion = getProp(props, 'DIRECCION', 'direccion');
+                                const habitacion = getProp(props, 'HABITACION', 'habitacion');
+                                const telefono = getProp(props, 'TELEFONO', 'telefono');
+                                const tachas = getProp(props, 'CANTTACHAV', 'canttachav');
+                                
+                                let info = `<p><span class="highlight">${nombre || 'Hotel'}</span></p>`;
+                                info += `<p>Distrito: ${distrito || 'N/A'}</p>`;
+                                info += `<p>Dirección: ${direccion || 'N/A'}</p>`;
+                                if (habitacion) info += `<p>Habitaciones: ${habitacion}</p>`;
+                                if (telefono) info += `<p>Tel: ${telefono}</p>`;
+                                info += `<p>Tachas en distrito: <span class="highlight">${tachas || 0}</span></p>`;
+                                infoPanel.innerHTML = info;
+                            });
+                            
+                            layer.on('mouseout', () => {
+                                infoPanel.innerHTML = 'Pase el cursor sobre un distrito o punto de interés';
+                            });
+                        }
+                    });
+                    
+                    currentLayer = L.layerGroup([distritosLayer, hotelesLayer]).addTo(map);
+                    updateLegend('hoteles');
+                    map.fitBounds(distritosLayer.getBounds());
+                }
+                
+            } catch (error) {
+                console.error('Error cargando capa:', error);
+                infoPanel.innerHTML = '<p style="color: #e74c3c;">Error cargando datos. Por favor, asegúrese de que los archivos GeoJSON estén en la misma carpeta.</p>';
+            }
+        }
+        
+        // Event listeners para los radio buttons
+        document.querySelectorAll('input[name="layer"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                loadLayer(e.target.value);
+            });
+        });
+        
+        // Cargar capa inicial (robos)
+        loadLayer('robos');
+    </script>
 </body>
 </html>
