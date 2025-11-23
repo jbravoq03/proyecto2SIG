@@ -65,6 +65,7 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             z-index: 1000;
             min-width: 200px;
+            max-width: 280px;
         }
         
         .legend h4 {
@@ -72,6 +73,15 @@
             color: #2c3e50;
             font-size: 14px;
             font-weight: bold;
+        }
+        
+        .legend-description {
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e0e0e0;
+            line-height: 1.4;
         }
         
         .legend-item {
@@ -91,8 +101,8 @@
         
         .layer-control {
             position: absolute;
-            top: 20px;
-            left: 60px;
+            bottom: 30px;
+            left: 20px;
             background: white;
             padding: 15px;
             border-radius: 8px;
@@ -140,6 +150,22 @@
             font-weight: bold;
         }
         
+        .map-title {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 12px 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+            text-align: center;
+        }
+        
         .loading {
             position: absolute;
             top: 50%;
@@ -158,6 +184,8 @@
 <body>
     <div id="map"></div>
     
+    <div class="map-title" id="map-title">Mapa de Robos de Vehículos por Distrito</div>
+    
     <div class="info-panel">
         <h4>Información</h4>
         <p id="info-content">Pase el cursor sobre un distrito o punto de interés</p>
@@ -172,19 +200,19 @@
         <h3>Capas del Mapa</h3>
         <div class="layer-option">
             <input type="radio" id="layer-robos" name="layer" value="robos" checked>
-            <label for="layer-robos">🚗 Robos de Vehículos (Coropletas)</label>
+            <label for="layer-robos"> Robos de Vehículos (Coropletas)</label>
         </div>
         <div class="layer-option">
             <input type="radio" id="layer-tachas" name="layer" value="tachas">
-            <label for="layer-tachas">🔧 Tachas de Vehículos (Coropletas)</label>
+            <label for="layer-tachas"> Tachas de Vehículos (Coropletas)</label>
         </div>
         <div class="layer-option">
             <input type="radio" id="layer-bancos" name="layer" value="bancos">
-            <label for="layer-bancos">🏦 Bancos en Zonas de Alto Robo</label>
+            <label for="layer-bancos"> Bancos en Zonas de Alto Robo</label>
         </div>
         <div class="layer-option">
             <input type="radio" id="layer-hoteles" name="layer" value="hoteles">
-            <label for="layer-hoteles">🏨 Hoteles en Zonas de Alta Tacha</label>
+            <label for="layer-hoteles"> Hoteles en Zonas de Alta Tacha</label>
         </div>
     </div>
 
@@ -205,6 +233,18 @@
         
         // Panel de información
         const infoPanel = document.getElementById('info-content');
+        const mapTitle = document.getElementById('map-title');
+        
+        // Actualizar título del mapa
+        function updateMapTitle(type) {
+            const titles = {
+                'robos': 'Mapa de Robos de Vehículos por Distrito',
+                'tachas': 'Mapa de Tachas de Vehículos por Distrito',
+                'bancos': 'Agencias Bancarias en Zonas de Alto Robo de Vehículos',
+                'hoteles': 'Hoteles en Zonas de Alta Tacha de Vehículos'
+            };
+            mapTitle.textContent = titles[type] || 'Mapa de Análisis Criminal';
+        }
         
         // Función para obtener color según cantidad de robos
         function getColorRobos(cantidad) {
@@ -319,6 +359,7 @@
             if (type === 'robos') {
                 const grades = [0, 5, 10, 20, 30, 40, 60, 80];
                 html = '<div style="margin-bottom: 5px; font-weight: bold;">Robos de Vehículos</div>';
+                html += '<div class="legend-description">Este mapa muestra la distribución de robos de vehículos en todos los distritos de Costa Rica. Los colores más oscuros indican mayor cantidad de robos.</div>';
                 for (let i = 0; i < grades.length; i++) {
                     html += '<div class="legend-item">' +
                         '<div class="legend-color" style="background:' + getColorRobos(grades[i] + 1) + '"></div>' +
@@ -328,6 +369,7 @@
             } else if (type === 'tachas') {
                 const grades = [0, 5, 10, 20, 30, 40, 60, 80];
                 html = '<div style="margin-bottom: 5px; font-weight: bold;">Tachas de Vehículos</div>';
+                html += '<div class="legend-description">Este mapa muestra la distribución de tachas (desguace ilegal) de vehículos en todos los distritos de Costa Rica. Los colores más oscuros indican mayor cantidad de tachas.</div>';
                 for (let i = 0; i < grades.length; i++) {
                     html += '<div class="legend-item">' +
                         '<div class="legend-color" style="background:' + getColorTachas(grades[i] + 1) + '"></div>' +
@@ -336,9 +378,10 @@
                 }
             } else if (type === 'bancos') {
                 html = '<div style="margin-bottom: 5px; font-weight: bold;">Agencias Bancarias</div>';
+                html += '<div class="legend-description">Ubicación de agencias bancarias dentro de los 10 distritos con mayor incidencia de robos de vehículos en Costa Rica.</div>';
                 html += '<div class="legend-item">' +
                     '<div style="width: 20px; height: 20px; background: #e74c3c; border-radius: 50%; margin-right: 10px; border: 2px solid white;"></div>' +
-                    '<span>Banco en zona de alto robo</span>' +
+                    '<span>Agencia bancaria</span>' +
                     '</div>';
                 html += '<div class="legend-item" style="margin-top: 10px;">' +
                     '<div class="legend-color" style="background: rgba(231, 76, 60, 0.2); border: 2px solid #e74c3c;"></div>' +
@@ -346,9 +389,10 @@
                     '</div>';
             } else if (type === 'hoteles') {
                 html = '<div style="margin-bottom: 5px; font-weight: bold;">Hoteles</div>';
+                html += '<div class="legend-description">Ubicación de hoteles dentro de los 10 distritos con mayor incidencia de tachas de vehículos en Costa Rica.</div>';
                 html += '<div class="legend-item">' +
                     '<div style="width: 20px; height: 20px; background: #3498db; border-radius: 50%; margin-right: 10px; border: 2px solid white;"></div>' +
-                    '<span>Hotel en zona de alta tacha</span>' +
+                    '<span>Hotel</span>' +
                     '</div>';
                 html += '<div class="legend-item" style="margin-top: 10px;">' +
                     '<div class="legend-color" style="background: rgba(52, 152, 219, 0.2); border: 2px solid #3498db;"></div>' +
@@ -380,6 +424,7 @@
                     }).addTo(map);
                     
                     updateLegend('robos');
+                    updateMapTitle('robos');
                     map.fitBounds(currentLayer.getBounds());
                     
                 } else if (layerType === 'tachas') {
@@ -393,6 +438,7 @@
                     }).addTo(map);
                     
                     updateLegend('tachas');
+                    updateMapTitle('tachas');
                     map.fitBounds(currentLayer.getBounds());
                     
                 } else if (layerType === 'bancos') {
@@ -401,6 +447,10 @@
                         fetch('top10_distritos_robosvehiculo.geojson'),
                         fetch('bancos_en_top10_distritos_robovehiculo.geojson')
                     ]);
+                    
+                    if (!distritosResp.ok || !bancosResp.ok) {
+                        throw new Error(`Error HTTP: ${distritosResp.status} o ${bancosResp.status}`);
+                    }
                     
                     const distritosData = await distritosResp.json();
                     const bancosData = await bancosResp.json();
@@ -455,6 +505,7 @@
                     
                     currentLayer = L.layerGroup([distritosLayer, bancosLayer]).addTo(map);
                     updateLegend('bancos');
+                    updateMapTitle('bancos');
                     map.fitBounds(distritosLayer.getBounds());
                     
                 } else if (layerType === 'hoteles') {
@@ -463,6 +514,10 @@
                         fetch('top10_distritos_tachasvehiculo.geojson'),
                         fetch('hoteles_en_top10_distritos_tachasvehiculo.geojson')
                     ]);
+                    
+                    if (!distritosResp.ok || !hotelesResp.ok) {
+                        throw new Error(`Error HTTP: ${distritosResp.status} o ${hotelesResp.status}`);
+                    }
                     
                     const distritosData = await distritosResp.json();
                     const hotelesData = await hotelesResp.json();
@@ -517,6 +572,7 @@
                     
                     currentLayer = L.layerGroup([distritosLayer, hotelesLayer]).addTo(map);
                     updateLegend('hoteles');
+                    updateMapTitle('hoteles');
                     map.fitBounds(distritosLayer.getBounds());
                 }
                 
